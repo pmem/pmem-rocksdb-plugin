@@ -15,7 +15,7 @@ PMemSecondaryCache::PMemSecondaryCache(const PMemAllocatorOptions& opt)
   } else {
     allocator_ = std::make_shared<FSDaxAllocator>(opt.pmem_path, opt.max_size);
   }
-  cache_ = NewLRUCache(opt.max_size * 0.8, 6, true, 0.0, allocator_,
+  cache_ = NewLRUCache(opt.max_size * 0.85, 6, true, 0.0, allocator_,
                        kDefaultToAdaptiveMutex, kDontChargeCacheMetadata);
 }
 
