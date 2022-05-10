@@ -9,14 +9,27 @@
 #include "pmem_scache_util.h"
 
 namespace ROCKSDB_NAMESPACE {
+
+struct PMemSecondaryCacheOptions {
+  static const char* kName() { return "PMemSecondaryCacheOptions"; }
+  bool is_kmem_dax = false;
+  std::string path;
+  size_t capacity = 32L * 1024 * 1024 * 1024;
+  double ratio = 0.85;
+};
+
+
 class PMemSecondaryCache : public SecondaryCache {
  public:
-  explicit PMemSecondaryCache(const PMemAllocatorOptions& opt);
+  explicit PMemSecondaryCache(const PMemSecondaryCacheOptions& opt);
   ~PMemSecondaryCache() override {
     cache_.reset();
   }
 
-  const char* Name() const override { return "PMemSecondaryCache"; }
+  Status PrepareOptions(const ConfigOptions& config_options) override;
+
+  static const char* kClassName() { return "PMemSecondaryCache"; }
+  const char* Name() const override { return kClassName(); }
 
   Status Insert(const Slice& key, void* value,
                 const Cache::CacheItemHelper* helper) override;
@@ -39,7 +52,7 @@ class PMemSecondaryCache : public SecondaryCache {
  private:
 
   std::shared_ptr<Cache> cache_;
-  const PMemAllocatorOptions option_;
+  PMemSecondaryCacheOptions opt_;
   std::shared_ptr<MemoryAllocator> allocator_;
 };
 

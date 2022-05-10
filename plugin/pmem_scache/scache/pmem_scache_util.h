@@ -67,15 +67,6 @@ class FSDaxAllocator : public MemoryAllocator {
   }
 };
 
-struct PMemAllocatorOptions {
-  bool is_kmem_dax;
-  std::string pmem_path;
-  size_t max_size;
-  PMemAllocatorOptions() : is_kmem_dax(true) {}
-  PMemAllocatorOptions(const std::string& path, size_t msize)
-      : is_kmem_dax(false), pmem_path(path), max_size(msize) {}
-};
-
 class PMemSCacheResultHandle : public SecondaryCacheResultHandle {
  public:
   PMemSCacheResultHandle(Cache* cache, Cache::Handle* handle, void* value,
