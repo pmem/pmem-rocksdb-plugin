@@ -3,8 +3,6 @@
  */
 #include "pmem_scache.h"
 
-#include <climits>
-
 #include "rocksdb/utilities/object_registry.h"
 #include "rocksdb/utilities/options_type.h"
 #include "util/compression.h"
@@ -12,7 +10,6 @@
 namespace ROCKSDB_NAMESPACE {
 
 static std::unordered_map<std::string, OptionTypeInfo> scache_type_info = {
-#ifndef ROCKSDB_LITE
     {"is_kmem_dax",
      {offsetof(struct PMemSecondaryCacheOptions, is_kmem_dax),
       OptionType::kBoolean, OptionVerificationType::kNormal,
@@ -26,13 +23,11 @@ static std::unordered_map<std::string, OptionTypeInfo> scache_type_info = {
     {"ratio",
      {offsetof(struct PMemSecondaryCacheOptions, ratio), OptionType::kDouble,
       OptionVerificationType::kNormal, OptionTypeFlags::kNone}},
-#endif  // ROCKSDB_LITE
 };
 
 PMemSecondaryCache::PMemSecondaryCache(const PMemSecondaryCacheOptions& opt)
     : opt_(opt) {
   RegisterOptions(&opt_, &scache_type_info);
-
 }
 
 Status PMemSecondaryCache::Insert(const Slice& key, void* value,

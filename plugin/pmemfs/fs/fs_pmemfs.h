@@ -19,7 +19,8 @@ namespace ROCKSDB_NAMESPACE {
 #if !defined(ROCKSDB_LITE) && defined(OS_LINUX)
 
 // extra options for PMemFS
-struct PMemOptions {
+struct PMemFSOptions {
+  static const char* kName() { return "PMemFSOptions"; }
   // the initial allocation size of wal file
   // default 256 MB
   size_t wal_init_size = 256 << 20;
@@ -30,8 +31,9 @@ struct PMemOptions {
 
 class PMemFS : public FileSystemWrapper {
  public:
-  explicit PMemFS();
-  const char* Name() const override { return "PMemFS"; }
+  explicit PMemFS(const PMemFSOptions& opt);
+  static const char* kClassName() { return "PMemFS"; }
+  const char* Name() const override { return kClassName(); }
 
   // we should use PMem-awared filesystem for WAL file
   IOStatus NewWritableFile(const std::string& fname,
@@ -51,8 +53,9 @@ class PMemFS : public FileSystemWrapper {
   IOStatus GetFileSize(const std::string& fname, const IOOptions& opts,
                        uint64_t* s, IODebugContext* dbg) override;
 
+  Status PrepareOptions(const ConfigOptions& config_options) override;
  private:
-  PMemOptions options;
+  PMemFSOptions opt_;
 
   static bool IsWALFile(const std::string& fname);
   static bool EndsWith(const std::string& str, const std::string& suffix);

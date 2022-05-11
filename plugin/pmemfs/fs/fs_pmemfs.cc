@@ -1,16 +1,30 @@
 /* SPDX-License-Identifier: BSD-3-Clause
-* Copyright(c) 2021 Intel Corporation
+ * Copyright(c) 2021 Intel Corporation
  */
+#include "fs_pmemfs.h"
+
 #include <fcntl.h>
 #include <unistd.h>
-#include "fs_pmemfs.h"
-#include "io_pmemfs.h"
 
-#include "rocksdb/env.h"
+#include "io_pmemfs.h"
 #include "rocksdb/utilities/object_registry.h"
+#include "rocksdb/utilities/options_type.h"
 
 namespace ROCKSDB_NAMESPACE {
-PMemFS::PMemFS() : FileSystemWrapper(FileSystem::Default()) {}
+
+static std::unordered_map<std::string, OptionTypeInfo> pmemfs_type_info = {
+    {"wal_init_size",
+     {offsetof(struct PMemFSOptions, wal_init_size), OptionType::kSizeT,
+      OptionVerificationType::kNormal, OptionTypeFlags::kNone}},
+    {"wal_size_addition",
+     {offsetof(struct PMemFSOptions, wal_size_addition), OptionType::kSizeT,
+      OptionVerificationType::kNormal, OptionTypeFlags::kNone}},
+};
+
+PMemFS::PMemFS(const PMemFSOptions& opt)
+    : FileSystemWrapper(FileSystem::Default()), opt_(opt) {
+  RegisterOptions(&opt_, &pmemfs_type_info);
+}
 
 bool PMemFS::EndsWith(const std::string& str, const std::string& suffix) {
   auto str_len = str.length();
@@ -37,8 +51,8 @@ IOStatus PMemFS::NewWritableFile(const std::string& fname,
   // else it is a log file
   FSWritableFile* file = nullptr;
   // create it
-  IOStatus status = PMemWritableFile::Create(fname, &file, options.wal_init_size,
-                   options.wal_size_addition);
+  IOStatus status = PMemWritableFile::Create(
+      fname, &file, opt_.wal_init_size, opt_.wal_size_addition);
 
   if (status.ok()) {
     result->reset(file);
@@ -69,7 +83,7 @@ IOStatus PMemFS::NewSequentialFile(const std::string& fname,
 }
 
 IOStatus PMemFS::GetFileSize(const std::string& fname, const IOOptions& opts,
-                     uint64_t* s, IODebugContext* dbg) {
+                             uint64_t* s, IODebugContext* dbg) {
   if (!IsWALFile(fname)) {
     return target()->GetFileSize(fname, opts, s, dbg);
   }
@@ -90,22 +104,23 @@ IOStatus PMemFS::GetFileSize(const std::string& fname, const IOOptions& opts,
   return IOStatus::OK();
 }
 
-Status NewPMemFS(FileSystem** fs) {
-  // TODO error handling
-  *fs = new PMemFS();
+Status PMemFS::PrepareOptions(const ConfigOptions& /*config_options*/) {
+  if (opt_.wal_init_size <= 4L * 1024 * 1024 ||
+      opt_.wal_size_addition <= 4L * 1024 * 1042) {
+    return Status::InvalidArgument("invalid size for pmemfs");
+  }
   return Status::OK();
 }
-extern "C" FactoryFunc<FileSystem> pmemfs_reg;
 
+extern "C" FactoryFunc<FileSystem> pmemfs_reg;
 FactoryFunc<FileSystem> pmemfs_reg =
     ObjectLibrary::Default()->Register<FileSystem>(
-        "pmemfs",
-        [](const std::string& /* uri */, std::unique_ptr<FileSystem>* f,
-           std::string* /* errmsg */) {
-          FileSystem* fs = nullptr;
-          NewPMemFS(&fs);
-          f->reset(fs);
+        PMemFS::kClassName(),
+        [](const std::string& /*uri*/, std::unique_ptr<FileSystem>* f,
+           std::string* /*errmsg*/) {
+          PMemFSOptions options;
+          auto* pmem_fs = new PMemFS(options);
+          f->reset(pmem_fs);
           return f->get();
         });
-
 }  // namespace ROCKSDB_NAMESPACE
