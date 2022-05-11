@@ -61,8 +61,6 @@ class PMemFS : public FileSystemWrapper {
   static bool EndsWith(const std::string& str, const std::string& suffix);
 };
 
-Status NewPMemFS(FileSystem** fs);
-
 #endif  // !defined(ROCKSDB_LITE) && defined(OS_LINUX)
 
 }  // namespace ROCKSDB_NAMESPACE
