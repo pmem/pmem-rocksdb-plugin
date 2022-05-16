@@ -27,5 +27,5 @@ $ DEBUG_LEVEL=0 ROCKSDB_PLUGINS=pmemfs make -j48 db_bench install
 Run db_bench
 ```
 # if your PMem mode is FSDAX and path is /mnt/pmem0
-$ db_bench --fs_uri=pmemfs --wal_dir=/mnt/pmem0/rocksdb_wal
+$ db_bench --fs_uri="id=PMemFS" --wal_dir=/mnt/pmem0/rocksdb_wal
 ```

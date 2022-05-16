@@ -27,8 +27,8 @@ $ DEBUG_LEVEL=0 ROCKSDB_PLUGINS=pmem_scache make -j48 db_bench install
 Run db_bench
 ```
 # if your PMem mode is FSDAX and path is /mnt/pmem0
-$ db_bench --benchmarks=readrandom --readonly --use_existing_db=true --open_files=10000 --num=50000000 --reads=10000 --cache_size=8388608 --threads=32 --db=/tmp/cache_bench/ --use_direct_reads=true --secondary_cache_uri=pmem_scache://fsdax:capacity=8589934592&path=/mnt/pmem0/p_cache
+$ db_bench --benchmarks=readrandom --readonly --use_existing_db=true --open_files=10000 --num=50000000 --reads=10000 --cache_size=8388608 --threads=32 --db=/tmp/cache_bench/ --use_direct_reads=true --secondary_cache_uri="id=PMemSecondaryCache; path=/mnt/pmem0/p_cache; capacity=8589934592"
 
 # if your PMem mode is KMemDAX
-$ db_bench --benchmarks=readrandom --readonly --use_existing_db=true --open_files=10000 --num=50000000 --reads=10000 --cache_size=8388608 --threads=32 --db=/tmp/cache_bench/ --use_direct_reads=true --secondary_cache_uri=pmem_scache://kmemdax:capacity=8589934592
+$ db_bench --benchmarks=readrandom --readonly --use_existing_db=true --open_files=10000 --num=50000000 --reads=10000 --cache_size=8388608 --threads=32 --db=/tmp/cache_bench/ --use_direct_reads=true --secondary_cache_uri="id=PMemSecondaryCache; is_kmem_dax=true; capacity=8589934592"
 ```
