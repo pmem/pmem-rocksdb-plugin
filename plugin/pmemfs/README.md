@@ -29,3 +29,48 @@ Run db_bench
 # if your PMem mode is FSDAX and path is /mnt/pmem0
 $ db_bench --fs_uri="id=PMemFS" --wal_dir=/mnt/pmem0/rocksdb_wal
 ```
+Run RocksDB Application
+```
+#include "rocksdb/db.h"
+#include "rocksdb/file_system.h"
+#include "rocksdb/convenience.h"
+
+int main(int argc, char *argv[]) {
+    rocksdb::DB *db;
+    rocksdb::Options options;
+    options.create_if_missing = true;
+
+    // create PMemFS instance, put into Env
+    std::string fs_uri = "id=PMemFS";
+    rocksdb::Env* env = rocksdb::Env::Default();
+    std::shared_ptr<rocksdb::Env> env_guard;
+    rocksdb::Status status = rocksdb::Env::CreateFromUri(rocksdb::ConfigOptions(), "", fs_uri,
+                                  &env, &env_guard);
+    if (!status.ok()) {
+        fprintf(stderr, "Failed creating env: %s\n", status.ToString().c_str());
+        return 0;
+    }
+
+    // put PMemFS plugin into options
+    options.env = env;
+    options.wal_dir = "/mnt/pmem0/rocksdb_wal";
+
+
+    std::string rocksdb_path = "db_data";
+    status = rocksdb::DB::Open(options, "db_data", &db);
+    fprintf(stdout, "Open RocksDB at path=%s, s status=%s\n", rocksdb_path.c_str(), status.ToString().c_str());
+
+    std::string test_key("key");
+    std::string test_val("value");
+    status = db->Put(rocksdb::WriteOptions(), test_key, test_val);
+    if (status.ok()) {
+        std::string saved_val;
+        db->Get(rocksdb::ReadOptions(), test_key, &saved_val);
+    } else {
+        fprintf(stderr, "Failed to put key, status=%s\n", status.ToString().c_str());
+    }
+
+    db->Close();
+    return 0;
+}
+```

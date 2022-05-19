@@ -32,3 +32,52 @@ $ db_bench --benchmarks=readrandom --readonly --use_existing_db=true --open_file
 # if your PMem mode is KMemDAX
 $ db_bench --benchmarks=readrandom --readonly --use_existing_db=true --open_files=10000 --num=50000000 --reads=10000 --cache_size=8388608 --threads=32 --db=/tmp/cache_bench/ --use_direct_reads=true --secondary_cache_uri="id=PMemSecondaryCache; is_kmem_dax=true; capacity=8589934592"
 ```
+Run RocksDB Application
+```
+#include "rocksdb/db.h"
+#include "rocksdb/cache.h"
+#include "rocksdb/secondary_cache.h"
+#include "rocksdb/convenience.h"
+
+int main(int argc, char *argv[]) {
+    rocksdb::DB *db;
+    rocksdb::Options options;
+    options.create_if_missing = true;
+
+    // create secondary cache instance
+    std::string secondary_cache_uri = "id=PMemSecondaryCache; path=/mnt/pmem0/p_cache; capacity=8589934592";
+    std::shared_ptr <rocksdb::SecondaryCache> secondary_cache_ptr;
+    rocksdb::Status status = rocksdb::SecondaryCache::CreateFromString(
+            rocksdb::ConfigOptions(), secondary_cache_uri, &secondary_cache_ptr);
+    if (!status.ok() || !secondary_cache_ptr) {
+        fprintf(stderr, "No secondary cache registered matching string: %s status=%s\n", secondary_cache_uri.c_str(),
+                status.ToString().c_str());
+        return 0;
+    }
+
+    // put secondary cache into block cache
+    rocksdb::LRUCacheOptions opts;
+    opts.secondary_cache = secondary_cache_ptr;
+    std::shared_ptr <rocksdb::Cache> cache_ptr = rocksdb::NewLRUCache(opts);
+    rocksdb::BlockBasedTableOptions block_based_options;
+    block_based_options.block_cache = cache_ptr;
+    options.table_factory.reset(NewBlockBasedTableFactory(block_based_options));
+
+    std::string rocksdb_path = "db_data";
+    status = rocksdb::DB::Open(options, "db_data", &db);
+    fprintf(stdout, "Open RocksDB at path=%s, s status=%s\n", rocksdb_path.c_str(), status.ToString().c_str());
+
+    std::string test_key("key");
+    std::string test_val("value");
+    status = db->Put(rocksdb::WriteOptions(), test_key, test_val);
+    if (status.ok()) {
+        std::string saved_val;
+        db->Get(rocksdb::ReadOptions(), test_key, &saved_val);
+    } else {
+        fprintf(stderr, "Failed to put key, status=%s\n", status.ToString().c_str());
+    }
+
+    db->Close();
+    return 0;
+
+```
