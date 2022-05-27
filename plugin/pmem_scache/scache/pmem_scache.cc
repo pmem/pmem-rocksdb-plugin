@@ -27,17 +27,17 @@ static std::unordered_map<std::string, OptionTypeInfo> scache_type_info = {
 //using MemoryTierCacheConfig = typename facebook::cachelib::MemoryTierCacheConfig;
 using LruAllocatorConfig = facebook::cachelib::CacheAllocatorConfig<facebook::cachelib::LruAllocator>;
 using CacheKey = typename CacheLibAllocator::Key;
-void PMemSecondaryCache::initialize_cache() {
+void PMemSecondaryCache::initialize_cache(const PMemSecondaryCacheOptions& option) {
       LruAllocatorConfig cfg;
       //.configureMemoryTiers(config_tier).validate(); // will throw if bad config
-      cfg.setCacheSize(48 * 1024 * 1024) // 48 MB
-              .setCacheName("MultiTier Cache")
-              .enableCachePersistence("/tmp")
+      cfg.setCacheSize(option.capacity) 
+              .setCacheName("MultiTierCache")
+              .enableCachePersistence(option.path)
               .setAccessConfig(
                       {25 , 10 }) // assuming caching 20 million items
               .configureMemoryTiers({
                                             facebook::cachelib::MemoryTierCacheConfig::fromShm().setRatio(1),
-                                            facebook::cachelib::MemoryTierCacheConfig::fromFile("/tmp/file1").setRatio(2)})
+                                            facebook::cachelib::MemoryTierCacheConfig::fromFile(option.path + "/file1").setRatio(2)})
               .validate(); // will throw if bad config
       cache_lib_ = std::make_unique<CacheLibAllocator>(CacheLibAllocator::SharedMemNew, cfg);
       default_pool_ = cache_lib_->addPool("default", cache_lib_->getCacheMemoryStats().cacheSize);
@@ -106,8 +106,6 @@ auto* entry = new CacheEntry(allocator_);
 
 std::unique_ptr<SecondaryCacheResultHandle> PMemSecondaryCache::Lookup(
     const Slice& key, const Cache::CreateCallback& create_cb, bool /*wait*/) {
-  std::string key_str = key.ToString();
-
   std::unique_ptr<SecondaryCacheResultHandle> secondary_handle;
   CacheLibAllocator::Key cacheKey(key.data(), key.size());
   CacheLibAllocator::ReadHandle handle = cache_lib_->find(cacheKey);
@@ -141,7 +139,7 @@ std::unique_ptr<SecondaryCacheResultHandle> PMemSecondaryCache::Lookup(
     if (s.ok()) {
       // TODO null handle ?
       secondary_handle.reset(
-          new PMemSCacheResultHandle(cache_.get(), nullptr, value, charge));
+          new PMemSCacheResultHandle(/*cache_.get()*/nullptr, nullptr, value, charge));
     } else {
       // TODO relase Cachelib handler
       //cache_->Release(handle);
@@ -189,6 +187,7 @@ std::unique_ptr<SecondaryCacheResultHandle> PMemSecondaryCache::Lookup(
 }
 
 Status PMemSecondaryCache::PrepareOptions(const ConfigOptions& /*config_options*/) {
+  /*
   if (opt_.capacity < (1L * 1024 * 1024 * 1024)) {
     return Status::InvalidArgument("capacity should be larger than 1GB");
   }
@@ -208,9 +207,9 @@ Status PMemSecondaryCache::PrepareOptions(const ConfigOptions& /*config_options*
   }
   cache_ = NewLRUCache(opt_.capacity * opt_.ratio, 6, true, 0.0, allocator_,
                        kDefaultToAdaptiveMutex, kDontChargeCacheMetadata);
-
+                       */
   // TODO cachelib
-  initialize_cache();
+  initialize_cache(opt_);
 
   return Status::OK();
 }

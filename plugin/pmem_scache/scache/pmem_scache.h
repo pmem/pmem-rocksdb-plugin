@@ -31,7 +31,7 @@ class PMemSecondaryCache : public SecondaryCache {
  public:
   explicit PMemSecondaryCache(const PMemSecondaryCacheOptions& opt);
   ~PMemSecondaryCache() override {
-    cache_.reset();
+    //cache_.reset();
   }
 
   Status PrepareOptions(const ConfigOptions& config_options) override;
@@ -46,7 +46,11 @@ class PMemSecondaryCache : public SecondaryCache {
       const Slice& key, const Cache::CreateCallback& create_cb,
       bool /*wait*/) override;
 
-  void Erase(const Slice& key) override { cache_->Erase(key); }
+  void Erase(const Slice& key) override { 
+    //cache_->Erase(key); 
+    CacheLibAllocator::Key cacheKey(key.data(), key.size());
+    cache_lib_->remove(cacheKey);
+  }
 
   void WaitAll(std::vector<SecondaryCacheResultHandle*> handles) override {
     for (SecondaryCacheResultHandle* handle : handles) {
@@ -59,11 +63,11 @@ class PMemSecondaryCache : public SecondaryCache {
 
  private:
 
-  void initialize_cache();
+  void initialize_cache(const PMemSecondaryCacheOptions& option);
 
-  std::shared_ptr<Cache> cache_;
+  //std::shared_ptr<Cache> cache_;
   PMemSecondaryCacheOptions opt_;
-  std::shared_ptr<MemoryAllocator> allocator_;
+  //std::shared_ptr<MemoryAllocator> allocator_;
 
   std::unique_ptr<CacheLibAllocator> cache_lib_;
   facebook::cachelib::PoolId default_pool_;
