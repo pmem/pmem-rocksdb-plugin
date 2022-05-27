@@ -4,11 +4,19 @@
 #pragma once
 
 #include <libpmem.h>
+
 #include <thread>
+
+#include <cachelib/allocator/CacheAllocator.h>
+#include <cachelib/allocator/CacheAllocatorConfig.h>
+#include <cachelib/allocator/MemoryTierCacheConfig.h>
+//#include <folly/init/Init.h>
 
 #include "pmem_scache_util.h"
 
 namespace ROCKSDB_NAMESPACE {
+
+using CacheLibAllocator = facebook::cachelib::LruAllocator; // or Lru2QAllocator, or TinyLFUAllocator
 
 struct PMemSecondaryCacheOptions {
   static const char* kName() { return "PMemSecondaryCacheOptions"; }
@@ -51,9 +59,14 @@ class PMemSecondaryCache : public SecondaryCache {
 
  private:
 
+  void initialize_cache();
+
   std::shared_ptr<Cache> cache_;
   PMemSecondaryCacheOptions opt_;
   std::shared_ptr<MemoryAllocator> allocator_;
+
+  std::unique_ptr<CacheLibAllocator> cache_lib_;
+  facebook::cachelib::PoolId default_pool_;
 };
 
 }  // namespace ROCKSDB_NAMESPACE
