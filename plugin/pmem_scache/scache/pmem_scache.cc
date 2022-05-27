@@ -24,7 +24,7 @@ static std::unordered_map<std::string, OptionTypeInfo> scache_type_info = {
      {offsetof(struct PMemSecondaryCacheOptions, ratio), OptionType::kDouble,
       OptionVerificationType::kNormal, OptionTypeFlags::kNone}},
 };
-using MemoryTierCacheConfig = typename facebook::cachelib::MemoryTierCacheConfig;
+//using MemoryTierCacheConfig = typename facebook::cachelib::MemoryTierCacheConfig;
 using LruAllocatorConfig = facebook::cachelib::CacheAllocatorConfig<facebook::cachelib::LruAllocator>;
 using CacheKey = typename CacheLibAllocator::Key;
 void PMemSecondaryCache::initialize_cache() {
@@ -36,8 +36,8 @@ void PMemSecondaryCache::initialize_cache() {
               .setAccessConfig(
                       {25 , 10 }) // assuming caching 20 million items
               .configureMemoryTiers({
-                                            MemoryTierCacheConfig::fromShm().setRatio(1),
-                                            MemoryTierCacheConfig::fromFile("/tmp/file1").setRatio(2)})
+                                            facebook::cachelib::MemoryTierCacheConfig::fromShm().setRatio(1),
+                                            facebook::cachelib::MemoryTierCacheConfig::fromFile("/tmp/file1").setRatio(2)})
               .validate(); // will throw if bad config
       cache_lib_ = std::make_unique<CacheLibAllocator>(CacheLibAllocator::SharedMemNew, cfg);
       default_pool_ = cache_lib_->addPool("default", cache_lib_->getCacheMemoryStats().cacheSize);
@@ -79,7 +79,7 @@ Status PMemSecondaryCache::Insert(const Slice& key, void* value,
   if (!alloc_handle) {
     return Status::IOError("cache may fail to evict due to too many pending writes"); // cache may fail to evict due to too many pending writes
   }
-  std::memcpy(alloc_handle->getWritableMemory(), output.c_str(), output.size());
+  std::memcpy(alloc_handle->getMemory(), output.c_str(), output.size());
   cache_lib_->insertOrReplace(alloc_handle);
   /*
 auto* entry = new CacheEntry(allocator_);
@@ -117,7 +117,7 @@ std::unique_ptr<SecondaryCacheResultHandle> PMemSecondaryCache::Lookup(
     size_t charge = 0;
     Status s;
     size_t csize = item->getSize();
-    const char* cdata = item->getMemory();
+    const char* cdata = (const char*)item->getMemory();
     UncompressionContext uncompressionContext(kSnappyCompression);
     UncompressionInfo uncompressionInfo(uncompressionContext,
                                         UncompressionDict::GetEmptyDict(),
@@ -130,7 +130,8 @@ std::unique_ptr<SecondaryCacheResultHandle> PMemSecondaryCache::Lookup(
 
     if (!uncompress_ptr) {
       fprintf(stderr, "failed to decompress\n");
-      cache_->Release(handle);
+      // TODO release cachelib handle
+      //cache_->Release(handle);
       return secondary_handle;
     }
 
@@ -138,8 +139,9 @@ std::unique_ptr<SecondaryCacheResultHandle> PMemSecondaryCache::Lookup(
     uncompress_raw += sizeof(uint64_t);
     s = create_cb(uncompress_raw, size, &value, &charge);
     if (s.ok()) {
+      // TODO null handle ?
       secondary_handle.reset(
-          new PMemSCacheResultHandle(cache_.get(), handle, value, charge));
+          new PMemSCacheResultHandle(cache_.get(), nullptr, value, charge));
     } else {
       // TODO relase Cachelib handler
       //cache_->Release(handle);

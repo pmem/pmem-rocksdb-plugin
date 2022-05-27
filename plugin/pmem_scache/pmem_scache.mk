@@ -1,3 +1,5 @@
 pmem_scache_SOURCES = scache/pmem_scache.cc
 pmem_scache_HEADERS = scache/pmem_scache.h scache/pmem_scache_util.h
-pmem_scache_LDFLAGS = -lpmem -u pmem_scache_reg
+#pmem_scache_LDFLAGS = -lpmem -ldouble-conversion -lfmtd -lglog -lthrift-core -lthriftprotocol -lthriftcpp2 -lthrifttype -lthriftmetadata -lthriftfrozen2 -lrpcmetadata -lfolly -lcachelib_allocator -lcachelib_common -lcachelib_datatype -lcachelib_shm -lcachelib_navy -u pmem_scache_reg
+#pmem_scache_LDFLAGS = -lpmem -lcachelib_allocator -L/home/chenyou/code/WIP/docker_code/CacheLib/opt/cachelib/lib64 -lfolly -L/home/chenyou/code/WIP/docker_code/CacheLib/opt/cachelib/lib64 -lfmtd -lglog -ldouble-conversion -lcachelib_common -lcachelib_datatype -lcachelib_shm -lcachelib_navy -u pmem_scache_reg
+pmem_scache_LDFLAGS = -lpmem -lcachelib_allocator -lcachelib_shm -lcachelib_navy -lcachelib_common -lthriftcpp2 -lthriftfrozen2 -lthriftmetadata -lthrifttype -lthriftprotocol -lasync -lwangle -lfizz -ltransport -lrpcmetadata -lthrift-core -lconcurrency -lfollybenchmark -lfolly_exception_counter -lfolly_exception_tracer -lfolly_exception_tracer_base -lfolly -lfmtd -lgflags_debug -lglog -ldouble-conversion -lboost_context -u pmem_scache_reg
