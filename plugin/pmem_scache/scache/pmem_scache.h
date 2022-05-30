@@ -4,18 +4,28 @@
 #pragma once
 
 #include <libpmem.h>
+
 #include <thread>
+
+#include <cachelib/allocator/CacheAllocator.h>
+#include <cachelib/allocator/CacheAllocatorConfig.h>
+#include <cachelib/allocator/MemoryTierCacheConfig.h>
+//#include <folly/init/Init.h>
 
 #include "pmem_scache_util.h"
 
 namespace ROCKSDB_NAMESPACE {
 
+using CacheLibAllocator = facebook::cachelib::LruAllocator; // or Lru2QAllocator, or TinyLFUAllocator
+
 struct PMemSecondaryCacheOptions {
   static const char* kName() { return "PMemSecondaryCacheOptions"; }
-  bool is_kmem_dax = false;
   std::string path;
   size_t capacity = 32L * 1024 * 1024 * 1024;
-  double ratio = 0.85;
+
+  unsigned int bucket_power = 25;
+
+  unsigned int locks_power = 10;
 };
 
 
@@ -23,7 +33,7 @@ class PMemSecondaryCache : public SecondaryCache {
  public:
   explicit PMemSecondaryCache(const PMemSecondaryCacheOptions& opt);
   ~PMemSecondaryCache() override {
-    cache_.reset();
+    //cache_.reset();
   }
 
   Status PrepareOptions(const ConfigOptions& config_options) override;
@@ -38,7 +48,11 @@ class PMemSecondaryCache : public SecondaryCache {
       const Slice& key, const Cache::CreateCallback& create_cb,
       bool /*wait*/) override;
 
-  void Erase(const Slice& key) override { cache_->Erase(key); }
+  void Erase(const Slice& key) override { 
+    //cache_->Erase(key); 
+    CacheLibAllocator::Key cacheKey(key.data(), key.size());
+    cache_lib_->remove(cacheKey);
+  }
 
   void WaitAll(std::vector<SecondaryCacheResultHandle*> handles) override {
     for (SecondaryCacheResultHandle* handle : handles) {
@@ -51,9 +65,14 @@ class PMemSecondaryCache : public SecondaryCache {
 
  private:
 
-  std::shared_ptr<Cache> cache_;
+  void initialize_cache(const PMemSecondaryCacheOptions& option);
+
+  //std::shared_ptr<Cache> cache_;
   PMemSecondaryCacheOptions opt_;
-  std::shared_ptr<MemoryAllocator> allocator_;
+  //std::shared_ptr<MemoryAllocator> allocator_;
+
+  std::unique_ptr<CacheLibAllocator> cache_lib_;
+  facebook::cachelib::PoolId default_pool_;
 };
 
 }  // namespace ROCKSDB_NAMESPACE

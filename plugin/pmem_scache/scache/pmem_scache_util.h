@@ -77,7 +77,7 @@ class PMemSCacheResultHandle : public SecondaryCacheResultHandle {
         size_(size),
         is_ready_(true) {}
 
-  ~PMemSCacheResultHandle() override { cache_->Release(handle_); }
+  ~PMemSCacheResultHandle() override { }
 
   bool IsReady() override { return is_ready_; }
 

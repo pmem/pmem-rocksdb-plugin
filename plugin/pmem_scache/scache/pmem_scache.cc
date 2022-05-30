@@ -10,20 +10,37 @@
 namespace ROCKSDB_NAMESPACE {
 
 static std::unordered_map<std::string, OptionTypeInfo> scache_type_info = {
-    {"is_kmem_dax",
-     {offsetof(struct PMemSecondaryCacheOptions, is_kmem_dax),
-      OptionType::kBoolean, OptionVerificationType::kNormal,
-      OptionTypeFlags::kNone}},
     {"path",
      {offsetof(struct PMemSecondaryCacheOptions, path), OptionType::kString,
       OptionVerificationType::kNormal, OptionTypeFlags::kNone}},
     {"capacity",
      {offsetof(struct PMemSecondaryCacheOptions, capacity), OptionType::kSizeT,
       OptionVerificationType::kNormal, OptionTypeFlags::kNone}},
-    {"ratio",
-     {offsetof(struct PMemSecondaryCacheOptions, ratio), OptionType::kDouble,
+      {"bucket_power", 
+      {offsetof(struct PMemSecondaryCacheOptions, bucket_power), OptionType::kUInt32T,
+      OptionVerificationType::kNormal, OptionTypeFlags::kNone}},
+      {"locks_power", 
+      {offsetof(struct PMemSecondaryCacheOptions, locks_power), OptionType::kUInt32T,
       OptionVerificationType::kNormal, OptionTypeFlags::kNone}},
 };
+//using MemoryTierCacheConfig = typename facebook::cachelib::MemoryTierCacheConfig;
+using LruAllocatorConfig = facebook::cachelib::CacheAllocatorConfig<facebook::cachelib::LruAllocator>;
+using CacheKey = typename CacheLibAllocator::Key;
+void PMemSecondaryCache::initialize_cache(const PMemSecondaryCacheOptions& option) {
+      LruAllocatorConfig cfg;
+      //.configureMemoryTiers(config_tier).validate(); // will throw if bad config
+      cfg.setCacheSize(option.capacity) 
+              .setCacheName("MultiTierCache")
+              .enableCachePersistence(option.path)
+              .setAccessConfig(
+                      {option.bucket_power, option.locks_power}) // assuming caching 20 million items
+              .configureMemoryTiers({
+                    facebook::cachelib::MemoryTierCacheConfig::fromShm().setRatio(1),
+                    facebook::cachelib::MemoryTierCacheConfig::fromFile(option.path + "/file1").setRatio(1)})
+              .validate(); // will throw if bad config
+      cache_lib_ = std::make_unique<CacheLibAllocator>(CacheLibAllocator::SharedMemNew, cfg);
+      default_pool_ = cache_lib_->addPool("default", cache_lib_->getCacheMemoryStats().cacheSize);
+}
 
 PMemSecondaryCache::PMemSecondaryCache(const PMemSecondaryCacheOptions& opt)
     : opt_(opt) {
@@ -57,7 +74,14 @@ Status PMemSecondaryCache::Insert(const Slice& key, void* value,
     return Status::IOError("failed to compress");
   }
 
-  auto* entry = new CacheEntry(allocator_);
+  auto alloc_handle = cache_lib_->allocate(default_pool_, key.data(), output.size());
+  if (!alloc_handle) {
+    return Status::IOError("cache may fail to evict due to too many pending writes"); // cache may fail to evict due to too many pending writes
+  }
+  std::memcpy(alloc_handle->getMemory(), output.c_str(), output.size());
+  cache_lib_->insertOrReplace(alloc_handle);
+  /*
+auto* entry = new CacheEntry(allocator_);
   entry->data = (char*)allocator_->Allocate(output.size());
   entry->size = output.size();
   if (entry->data == nullptr) {
@@ -69,21 +93,58 @@ Status PMemSecondaryCache::Insert(const Slice& key, void* value,
               PMEM_F_MEM_NONTEMPORAL);
 
   s = cache_->Insert(key, entry, output.size(),
-                     [](const Slice& /*key*/, void* val) -> void {
+                     [](const Slice& key, void* val) -> void {
                        delete static_cast<CacheEntry*>(val);
                      });
   if (!s.ok()) {
     fprintf(stderr, "internal lru cache failed to insert entry\n");
   }
+   */
   return Status::OK();
 }
 
 std::unique_ptr<SecondaryCacheResultHandle> PMemSecondaryCache::Lookup(
     const Slice& key, const Cache::CreateCallback& create_cb, bool /*wait*/) {
-  std::string key_str = key.ToString();
-
   std::unique_ptr<SecondaryCacheResultHandle> secondary_handle;
+  CacheLibAllocator::Key cacheKey(key.data(), key.size());
+  CacheLibAllocator::ReadHandle handle = cache_lib_->find(cacheKey);
+  auto* item = handle.get();
+  if(item) {
+    void* value = nullptr;
+    size_t charge = 0;
+    Status s;
+    size_t csize = item->getSize();
+    const char* cdata = (const char*)item->getMemory();
+    UncompressionContext uncompressionContext(kSnappyCompression);
+    UncompressionInfo uncompressionInfo(uncompressionContext,
+                                        UncompressionDict::GetEmptyDict(),
+                                        kSnappyCompression);
+    size_t uncompress_size;
+    std::string output;
+    CacheAllocationPtr uncompress_ptr =
+        UncompressData(uncompressionInfo, cdata, csize, &uncompress_size, -1);
+    char* uncompress_raw = uncompress_ptr.get();
 
+    if (!uncompress_ptr) {
+      fprintf(stderr, "failed to decompress\n");
+      // TODO release cachelib handle
+      //cache_->Release(handle);
+      return secondary_handle;
+    }
+
+    size_t size = DecodeFixed64(uncompress_raw);
+    uncompress_raw += sizeof(uint64_t);
+    s = create_cb(uncompress_raw, size, &value, &charge);
+    if (s.ok()) {
+      // TODO null handle ?
+      secondary_handle.reset(
+          new PMemSCacheResultHandle(/*cache_.get()*/nullptr, nullptr, value, charge));
+    } else {
+      // TODO relase Cachelib handler
+      //cache_->Release(handle);
+    }
+  }
+/*
   Cache::Handle* handle = cache_->Lookup(key);
   if (handle) {
     void* value = nullptr;
@@ -119,11 +180,13 @@ std::unique_ptr<SecondaryCacheResultHandle> PMemSecondaryCache::Lookup(
       cache_->Release(handle);
     }
   }
+  */
 
   return secondary_handle;
 }
 
 Status PMemSecondaryCache::PrepareOptions(const ConfigOptions& /*config_options*/) {
+  /*
   if (opt_.capacity < (1L * 1024 * 1024 * 1024)) {
     return Status::InvalidArgument("capacity should be larger than 1GB");
   }
@@ -143,6 +206,10 @@ Status PMemSecondaryCache::PrepareOptions(const ConfigOptions& /*config_options*
   }
   cache_ = NewLRUCache(opt_.capacity * opt_.ratio, 6, true, 0.0, allocator_,
                        kDefaultToAdaptiveMutex, kDontChargeCacheMetadata);
+                       */
+  // TODO cachelib
+  initialize_cache(opt_);
+
   return Status::OK();
 }
 
