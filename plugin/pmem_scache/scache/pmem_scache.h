@@ -20,10 +20,12 @@ using CacheLibAllocator = facebook::cachelib::LruAllocator; // or Lru2QAllocator
 
 struct PMemSecondaryCacheOptions {
   static const char* kName() { return "PMemSecondaryCacheOptions"; }
-  bool is_kmem_dax = false;
   std::string path;
   size_t capacity = 32L * 1024 * 1024 * 1024;
-  double ratio = 0.85;
+
+  unsigned int bucket_power = 25;
+
+  unsigned int locks_power = 10;
 };
 
 

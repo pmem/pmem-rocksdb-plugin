@@ -10,18 +10,17 @@
 namespace ROCKSDB_NAMESPACE {
 
 static std::unordered_map<std::string, OptionTypeInfo> scache_type_info = {
-    {"is_kmem_dax",
-     {offsetof(struct PMemSecondaryCacheOptions, is_kmem_dax),
-      OptionType::kBoolean, OptionVerificationType::kNormal,
-      OptionTypeFlags::kNone}},
     {"path",
      {offsetof(struct PMemSecondaryCacheOptions, path), OptionType::kString,
       OptionVerificationType::kNormal, OptionTypeFlags::kNone}},
     {"capacity",
      {offsetof(struct PMemSecondaryCacheOptions, capacity), OptionType::kSizeT,
       OptionVerificationType::kNormal, OptionTypeFlags::kNone}},
-    {"ratio",
-     {offsetof(struct PMemSecondaryCacheOptions, ratio), OptionType::kDouble,
+      {"bucket_power", 
+      {offsetof(struct PMemSecondaryCacheOptions, bucket_power), OptionType::kUInt32T,
+      OptionVerificationType::kNormal, OptionTypeFlags::kNone}},
+      {"locks_power", 
+      {offsetof(struct PMemSecondaryCacheOptions, locks_power), OptionType::kUInt32T,
       OptionVerificationType::kNormal, OptionTypeFlags::kNone}},
 };
 //using MemoryTierCacheConfig = typename facebook::cachelib::MemoryTierCacheConfig;
@@ -34,10 +33,10 @@ void PMemSecondaryCache::initialize_cache(const PMemSecondaryCacheOptions& optio
               .setCacheName("MultiTierCache")
               .enableCachePersistence(option.path)
               .setAccessConfig(
-                      {25 , 10 }) // assuming caching 20 million items
+                      {option.bucket_power, option.locks_power}) // assuming caching 20 million items
               .configureMemoryTiers({
-                                            facebook::cachelib::MemoryTierCacheConfig::fromShm().setRatio(1),
-                                            facebook::cachelib::MemoryTierCacheConfig::fromFile(option.path + "/file1").setRatio(2)})
+                    facebook::cachelib::MemoryTierCacheConfig::fromShm().setRatio(1),
+                    facebook::cachelib::MemoryTierCacheConfig::fromFile(option.path + "/file1").setRatio(1)})
               .validate(); // will throw if bad config
       cache_lib_ = std::make_unique<CacheLibAllocator>(CacheLibAllocator::SharedMemNew, cfg);
       default_pool_ = cache_lib_->addPool("default", cache_lib_->getCacheMemoryStats().cacheSize);
