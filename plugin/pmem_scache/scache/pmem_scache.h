@@ -16,7 +16,7 @@ class PMemSecondaryCache : public SecondaryCache {
     cache_.reset();
   }
 
-  const char* Name() const override { return "PMemSecondaryCache"; }
+  std::string Name() override { return "PMemSecondaryCache"; }
 
   Status Insert(const Slice& key, void* value,
                 const Cache::CacheItemHelper* helper) override;
